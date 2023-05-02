@@ -8,7 +8,7 @@ export const connectionDatabase = new DataSource({
     username: ormConfig.username,
     password: ormConfig.password,
     database: ormConfig.database,
-    entities: ['src/entity/*.ts'],
+    entities: ['src/entities/*.ts'],
     logging: false,
     synchronize: true
 })
