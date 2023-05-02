@@ -2,7 +2,7 @@ import { Request, Response } from 'express'
 
 import { getAxios } from '../utils/axios'
 
-interface Film {
+interface Films {
     id: string,
     url: string,
     title: string,
@@ -23,7 +23,7 @@ export const getFilms = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, message: 'There are no movies.' })
     }
 
-    const films: Film[] = response.data.results.map((film: Film) => {
+    const films: Films[] = response.data.results.map((film: Films) => {
         return {
             id: film.url.split('/')[5],
             title: film.title,
