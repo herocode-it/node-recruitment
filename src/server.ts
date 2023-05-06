@@ -1,11 +1,11 @@
-import express from 'express'
+import express, { Application } from 'express'
 
 import { connectionDatabase } from './db'
 import { backendPort } from '../websiteConfig.json'
 import { routes } from './routes'
 
 connectionDatabase.initialize().then(() => {
-    const app = express()
+    const app: Application = express()
 
     app.use(express.json())
     routes(app)
