@@ -1,13 +1,7 @@
 import { Request, Response } from 'express'
 
 import { getAxios } from '../utils/axios'
-
-interface Films {
-    id: string,
-    url: string,
-    title: string,
-    release_date: string
-}
+import { Films } from '../interfaces/interfaces'
 
 export const getFilms = async (req: Request, res: Response) => {
     let response
