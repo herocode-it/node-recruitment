@@ -8,9 +8,6 @@ export class Movies {
     id: number
 
     @Column()
-    movie_id: number
-
-    @Column()
     title: string
 
     @Column('date')

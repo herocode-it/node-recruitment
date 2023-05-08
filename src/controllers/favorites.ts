@@ -2,6 +2,10 @@ import { Request, Response } from 'express'
 import { Like, Repository } from 'typeorm'
 
 import { connectionDatabase } from '../db'
+import { getCharacterDetails, getMovieDetails } from '../utils/axios'
+import { AddFavoriteFilm, MovieDetails } from '../interfaces/interfaces'
+import { Characters } from '../entities/characters'
+import { Movies } from '../entities/movies'
 import { Favourites } from '../entities/favourites'
 import { parseValueAsInt, getStringOrDefault } from '../utils/utils'
 
@@ -50,4 +54,92 @@ export const getFavourite = async (req: Request, res: Response) => {
     }
 
     res.status(200).json({ success: true, data: favourite })
+}
+
+export const addToFavorites = async (req: Request, res: Response) => {
+    const { name, movieIds }: AddFavoriteFilm = req.body
+
+    if (!name || !movieIds) {
+        return res.status(400).json({ success: false, message: 'All fields must be provided.' })
+    }
+
+    if (!Array.isArray(movieIds)) {
+        return res.status(400).json({ success: false, message: 'Field movieIds must be an array.' })
+    }
+
+    if (movieIds.some(movieId => typeof movieId !== 'number')) {
+        return res.status(400).json({ success: false, message: 'All values in moveIds must be a numbers' })
+    }
+
+    const favouritesListRepository: Repository<Favourites> = await connectionDatabase.getRepository(Favourites)
+    const existingFavouriteList: boolean = await favouritesListRepository.exist({ where: { name: name } })
+
+    if (existingFavouriteList) {
+        return res.status(400).json({ success: false, message: 'List with that name already exists.' })
+    }
+
+    let movies: MovieDetails[]
+
+    try {
+        movies = await _getMovies(movieIds)
+    } catch (err) {
+        return res.status(400).json({ success: false, message: 'Invalid movie IDs' });
+    }
+
+    const moviesRepository: Repository<Movies> = await connectionDatabase.getRepository(Movies)
+    const savedMovies: Movies[] = await Promise.all(movies.map(movie => _saveMovie(moviesRepository, movie)))
+    const createList: Favourites = await favouritesListRepository.create({ name, movies: savedMovies })
+    await favouritesListRepository.save(createList)
+
+    res.status(201).json({ success: true, id: createList.id })
+}
+
+async function _getMovies(movieIds: number[]): Promise<MovieDetails[]> {
+    const responses = await Promise.all(movieIds.map((movieId: number) => getMovieDetails(movieId)))
+
+    if (!responses.every(response => response.status === 200)) {
+        throw new Error('Failed to fetch movie details')
+    }
+
+    // return only response body, not the entire axios objects
+    return responses.map(response => response.data)
+}
+
+export const _saveMovie = async (moviesRepo: Repository<Movies>, movie: MovieDetails) => {
+    const existingMovie: Movies | null = await moviesRepo.findOne({ where: { id: movie.episode_id } })
+
+    if (existingMovie) {
+        return existingMovie
+    }
+
+    const characters = await Promise.all(movie.characters.map(characterUrl => _saveCharacter(characterUrl)))
+
+    const createMovie: Movies = await moviesRepo.create({
+        id: movie.episode_id,
+        title: movie.title,
+        release_date: movie.release_date,
+        characters
+    })
+
+    return await moviesRepo.save(createMovie)
+}
+
+export const _saveCharacter = async (characterUrl: string): Promise<Characters> => {
+    const character = await getCharacterDetails(characterUrl)
+
+    const charactersRepository: Repository<Characters> = await connectionDatabase.getRepository(Characters)
+    const existingCharacter: Characters | null = await charactersRepository.findOne({
+        where: { character_id: character.characterId }
+    })
+
+    if (existingCharacter) {
+        return existingCharacter
+    }
+
+    const createCharacter: Characters = await charactersRepository.create({
+        name: character.name,
+        character_id: character.characterId
+    })
+
+    return await charactersRepository.save(createCharacter)
 }
