@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import { Like, Repository } from 'typeorm'
+import excel from 'exceljs'
 
 import { connectionDatabase } from '../db'
 import { getCharacterDetails, getMovieDetails } from '../utils/axios'
@@ -54,6 +55,66 @@ export const getFavourite = async (req: Request, res: Response) => {
     }
 
     res.status(200).json({ success: true, data: favourite })
+}
+
+export const generateReport = async (req: Request, res: Response) => {
+    const { id } = req.params
+
+    const favouriteList: Favourites | null = await connectionDatabase.getRepository(Favourites).findOne({
+        where: { id: parseInt(id) },
+        relations: ['movies', 'movies.characters']
+    })
+
+    if (!favouriteList) {
+        return res.status(400).json({ success: false, message: 'Favourite list with given ID does not exist.' })
+    }
+
+    // Create a new Excel workbook
+    const workbook = new excel.Workbook()
+    const worksheet = workbook.addWorksheet('Favorite List')
+
+    // Set up the columns
+    worksheet.columns = [
+        { header: 'Characters', key: 'characters' },
+        { header: 'Movies', key: 'movies' },
+    ]
+
+    // Retrieve distinct characters and movie titles from the favorite list
+    const characters: Set<string> = new Set<string>
+    const movies: string[] = []
+
+    for (const movie of favouriteList.movies) {
+        for (const character of movie.characters) {
+            characters.add(character.name)
+        }
+
+        movies.push(movie.title)
+    }
+
+    let isFirstRow = true
+
+    // Add data to the worksheet
+    for (const character of characters) {
+        let rowData: {characters: string, movies?: string} = { characters: character }
+
+        if (isFirstRow) {
+            rowData.movies = movies.join(',')
+            isFirstRow = false
+        }
+
+        worksheet.addRow(rowData)
+    }
+
+    // Set column widths
+    worksheet.getColumn(1).width = 30
+    worksheet.getColumn(2).width = 40
+
+    // Set the content type and disposition for the response
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="favorite_list.xlsx"`)
+
+    await workbook.xlsx.write(res)
+    res.status(200).end()
 }
 
 export const addToFavorites = async (req: Request, res: Response) => {
